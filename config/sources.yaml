@@ -1,0 +1,142 @@
+# OSINT Sources Configuration
+# Updated: 2026-03-15
+
+# RSS Feeds - these work without API keys
+rss_feeds:
+  # US Government
+  - name: "Defense.gov"
+    url: "https://www.defense.gov/news/feed/"
+    category: "us_gov"
+    priority: 1
+    
+  - name: "State Department"
+    url: "https://www.state.gov/rss/press-releases/"
+    category: "us_gov"
+    priority: 1
+    
+  # Major News (International)
+  - name: "BBC World"
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
+    category: "news"
+    priority: 1
+    
+  - name: "Al Jazeera"
+    url: "https://www.aljazeera.com/xml/rss/all.xml"
+    category: "news"
+    priority: 1
+    
+  - name: "Reuters World"
+    url: "https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best"
+    category: "news"
+    priority: 1
+    
+  - name: "South China Morning Post"
+    url: "https://www.scmp.com/rss/91/feed"
+    category: "news"
+    priority: 2
+
+  # Analysis
+  - name: "War on the Rocks"
+    url: "https://warontherocks.com/feed/"
+    category: "analysis"
+    priority: 1
+    
+  - name: "Lawfare"
+    url: "https://www.lawfaremedia.org/feed"
+    category: "analysis"
+    priority: 2
+    
+  - name: "CSIS"
+    url: "https://www.csis.org/rss.xml"
+    category: "analysis"
+    priority: 2
+
+  # Defense Industry
+  - name: "Defense News"
+    url: "https://www.defensenews.com/arc/outboundfeeds/rss/"
+    category: "defense"
+    priority: 2
+    
+  - name: "Breaking Defense"
+    url: "https://breakingdefense.com/feed/"
+    category: "defense"
+    priority: 2
+
+# Nitter instances for Twitter/X (no API needed)
+# These are public Nitter instances that expose RSS
+nitter_instances:
+  - "https://nitter.net"
+  - "https://nitter.poast.org"
+  - "https://nitter.privacydev.net"
+
+# Twitter accounts to monitor (converted to Nitter RSS)
+twitter_accounts:
+  # Tier 1 - Most reliable
+  - username: "bellingcat"
+    focus: "investigations"
+  - username: "TheIntelFrog"
+    focus: "military"
+  - username: "barbarastarrcnn"
+    focus: "pentagon"
+  - username: "DeptofDefense"
+    focus: "official"
+  - username: "CENTCOM"
+    focus: "official"
+  - username: "NATO"
+    focus: "official"
+  
+  # Tier 2 - Regional
+  - username: "OSINT_Ukraine"
+    focus: "ukraine"
+  - username: "AuroraIntel"
+    focus: "middle_east"
+  - username: "COUPSURE"
+    focus: "global"
+  - username: "IntelCrab"
+    focus: "geospatial"
+  - username: "detresfa_"
+    focus: "satellite"
+  - username: "RALee85"
+    focus: "russia"
+  - username: "NavyLookout"
+    focus: "naval"
+  - username: "AirbusDragon"
+    focus: "aviation"
+
+# Alert keywords (immediate notification)
+alert_keywords:
+  critical:
+    - "DEFCON"
+    - "nuclear weapon"
+    - "missile launch detected"
+    - "declaration of war"
+    - "military mobilization"
+    - "Article 5"
+    
+  high:
+    - "troop movement"
+    - "naval deployment"
+    - "air strike"
+    - "embassy evacuated"
+    - "energy infrastructure attack"
+    - "cyber attack"
+    - "missile strike"
+    - "invasion"
+
+# Region focus
+regions:
+  iran:
+    keywords: ["Iran", "Tehran", "IRGC", "Persian Gulf", "Strait of Hormuz", "Isfahan", "Natanz"]
+    priority: 1
+    
+  china:
+    keywords: ["China", "Beijing", "Taiwan", "South China Sea", "PLA", "Xi Jinping"]
+    priority: 1
+    
+  russia:
+    keywords: ["Russia", "Moscow", "Ukraine", "Kremlin", "Putin", "NATO"]
+    priority: 1
+    
+  middle_east:
+    keywords: ["Israel", "Gaza", "Syria", "Lebanon", "Yemen", "Saudi Arabia"]
+    priority: 2
