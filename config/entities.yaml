@@ -1,0 +1,121 @@
+# Entity seeds: canonical names, types, aliases for custom NER
+# Updated: 2026-03-16
+
+entities:
+  # Weapon Systems
+  - canonical_name: "F-35 Lightning II"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["F-35", "F35", "Joint Strike Fighter", "JSF", "F-35A", "F-35B", "F-35C"]
+
+  - canonical_name: "S-400 Triumf"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["S-400", "S400", "SA-21 Growler"]
+
+  - canonical_name: "HIMARS"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["M142 HIMARS", "High Mobility Artillery Rocket System"]
+
+  - canonical_name: "Shahed-136"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Shahed 136", "Shahed-131", "Geran-2", "Geranium-2"]
+
+  - canonical_name: "DF-41"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["DF41", "Dongfeng-41", "CSS-X-20"]
+
+  - canonical_name: "Patriot"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Patriot missile", "MIM-104 Patriot", "PAC-3"]
+
+  - canonical_name: "ATACMS"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["MGM-140 ATACMS", "Army Tactical Missile System"]
+
+  - canonical_name: "Kalibr"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Kalibr missile", "3M-54 Kalibr", "Caliber"]
+
+  - canonical_name: "Iron Dome"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Iron Dome system", "Kipat Barzel"]
+
+  - canonical_name: "Kinzhal"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Kh-47M2 Kinzhal", "Kinzhal hypersonic"]
+
+  - canonical_name: "Houthi drone"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Samad drone", "Qasef drone"]
+
+  - canonical_name: "Bayraktar TB2"
+    entity_type: "WEAPON_SYSTEM"
+    aliases: ["Bayraktar", "TB2"]
+
+  # Military Organizations
+  - canonical_name: "IRGC"
+    entity_type: "ORG"
+    aliases: ["Islamic Revolutionary Guard Corps", "Revolutionary Guards", "Sepah", "Pasdaran"]
+    wikidata_id: "Q106482"
+
+  - canonical_name: "PLA"
+    entity_type: "ORG"
+    aliases: ["People's Liberation Army", "Chinese military", "PLAA", "PLAN", "PLAAF"]
+
+  - canonical_name: "Wagner Group"
+    entity_type: "ORG"
+    aliases: ["Wagner", "PMC Wagner", "Wagner PMC", "Africa Corps"]
+
+  - canonical_name: "Hezbollah"
+    entity_type: "ORG"
+    aliases: ["Hizballah", "Hizbollah", "Party of God"]
+
+  - canonical_name: "Hamas"
+    entity_type: "ORG"
+    aliases: ["Islamic Resistance Movement", "Izz ad-Din al-Qassam Brigades"]
+
+  - canonical_name: "Houthis"
+    entity_type: "ORG"
+    aliases: ["Ansar Allah", "Houthi rebels", "Houthi movement"]
+
+  # Key Facilities
+  - canonical_name: "Natanz"
+    entity_type: "FACILITY"
+    aliases: ["Natanz nuclear facility", "Natanz enrichment plant"]
+
+  - canonical_name: "Fordow"
+    entity_type: "FACILITY"
+    aliases: ["Fordow Fuel Enrichment Plant", "Fordo"]
+
+  - canonical_name: "Zaporizhzhia NPP"
+    entity_type: "FACILITY"
+    aliases: ["Zaporizhzhia nuclear power plant", "ZNPP", "Zaporizhzhia NPP"]
+
+  - canonical_name: "Dimona"
+    entity_type: "FACILITY"
+    aliases: ["Dimona reactor", "Shimon Peres Negev Nuclear Research Center"]
+
+  # Key Leaders
+  - canonical_name: "Vladimir Putin"
+    entity_type: "PERSON"
+    aliases: ["Putin", "Russian president"]
+    wikidata_id: "Q7747"
+
+  - canonical_name: "Xi Jinping"
+    entity_type: "PERSON"
+    aliases: ["Xi", "Chinese president", "General Secretary Xi"]
+    wikidata_id: "Q15031"
+
+  - canonical_name: "Ali Khamenei"
+    entity_type: "PERSON"
+    aliases: ["Khamenei", "Supreme Leader", "Ayatollah Khamenei"]
+    wikidata_id: "Q57336"
+
+  - canonical_name: "Volodymyr Zelenskyy"
+    entity_type: "PERSON"
+    aliases: ["Zelensky", "Zelenskyy", "Ukrainian president"]
+    wikidata_id: "Q313475"
+
+  - canonical_name: "Benjamin Netanyahu"
+    entity_type: "PERSON"
+    aliases: ["Netanyahu", "Bibi", "Israeli PM"]
+    wikidata_id: "Q15730"

@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}STIX Export - OSINT Monitor{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1rem;">STIX 2.1 Export</h2>
+
+<div class="grid grid-2" style="margin-bottom: 1rem;">
+    <!-- Bulk export -->
+    <div class="card">
+        <h2>Bulk Export</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Export all events from a time window as a single STIX 2.1 bundle.
+        </p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button onclick="exportBulk(24)">Last 24 Hours</button>
+            <button onclick="exportBulk(72)">Last 72 Hours</button>
+            <button onclick="exportBulk(168)">Last 7 Days</button>
+        </div>
+    </div>
+
+    <!-- Single event export -->
+    <div class="card">
+        <h2>Single Event Export</h2>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Export a specific event as a STIX 2.1 bundle.
+        </p>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="number" id="event-id-input" placeholder="Event ID" style="width: 120px;"
+                   onkeydown="if(event.key==='Enter') exportEvent()">
+            <button onclick="exportEvent()">Export Event</button>
+            <button onclick="loadEventPicker()" style="background: var(--bg-secondary); border-color: var(--border);">Browse</button>
+        </div>
+        <div id="event-picker" style="display: none; margin-top: 0.8rem; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;"></div>
+    </div>
+</div>
+
+<!-- Status -->
+<div id="export-status" style="display: none;" class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="status-text" style="font-size: 0.85rem;"></span>
+        <button id="download-btn" onclick="downloadBundle()" style="display: none;">Download .json</button>
+    </div>
+</div>
+
+<!-- Preview -->
+<div id="preview-container" style="display: none;" class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+        <h2>Bundle Preview</h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span id="object-count" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+            <button onclick="copyBundle()" style="background: var(--bg-secondary); border-color: var(--border); font-size: 0.8rem;">Copy JSON</button>
+        </div>
+    </div>
+    <pre id="json-preview" style="
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1rem;
+        font-size: 0.78rem;
+        line-height: 1.5;
+        max-height: 500px;
+        overflow: auto;
+        color: var(--text-primary);
+        white-space: pre-wrap;
+        word-break: break-all;
+    "></pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentBundle = null;
+let currentFilename = 'stix-bundle.json';
+
+function showStatus(msg, isError) {
+    const statusEl = document.getElementById('export-status');
+    const textEl = document.getElementById('status-text');
+    statusEl.style.display = 'block';
+    textEl.textContent = msg;
+    textEl.style.color = isError ? 'var(--critical)' : 'var(--text-primary)';
+    document.getElementById('download-btn').style.display = 'none';
+}
+
+function showPreview(bundle, filename) {
+    currentBundle = bundle;
+    currentFilename = filename;
+
+    const previewEl = document.getElementById('preview-container');
+    const jsonEl = document.getElementById('json-preview');
+    const countEl = document.getElementById('object-count');
+    const dlBtn = document.getElementById('download-btn');
+
+    const jsonStr = JSON.stringify(bundle, null, 2);
+    previewEl.style.display = 'block';
+    dlBtn.style.display = 'inline-block';
+
+    // Syntax highlight: keys in accent color, strings in green, numbers in orange
+    const highlighted = jsonStr
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"([^"]+)":/g, '<span style="color:var(--accent);">"$1"</span>:')
+        .replace(/: "([^"]*)"/g, ': <span style="color:var(--low);">"$1"</span>')
+        .replace(/: (\d+\.?\d*)/g, ': <span style="color:var(--high);">$1</span>');
+    jsonEl.innerHTML = highlighted;
+
+    const objCount = bundle.objects ? bundle.objects.length : 0;
+    countEl.textContent = `${objCount} STIX objects | ${(jsonStr.length / 1024).toFixed(1)} KB`;
+
+    document.getElementById('status-text').textContent = `Successfully loaded ${objCount} STIX objects.`;
+    document.getElementById('status-text').style.color = 'var(--low)';
+}
+
+async function exportBulk(hours) {
+    showStatus(`Exporting events from the last ${hours} hours...`);
+    document.getElementById('preview-container').style.display = 'none';
+
+    try {
+        const res = await fetch(`/api/intel/stix/export?hours_back=${hours}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const bundle = await res.json();
+        showPreview(bundle, `stix-bundle-${hours}h.json`);
+    } catch (err) {
+        showStatus(`Export failed: ${err.message}`, true);
+    }
+}
+
+async function exportEvent() {
+    const eventId = document.getElementById('event-id-input').value;
+    if (!eventId) { showStatus('Please enter an event ID.', true); return; }
+
+    showStatus(`Exporting event #${eventId}...`);
+    document.getElementById('preview-container').style.display = 'none';
+
+    try {
+        const res = await fetch(`/api/intel/stix/events/${eventId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const bundle = await res.json();
+        showPreview(bundle, `stix-event-${eventId}.json`);
+    } catch (err) {
+        showStatus(`Export failed: ${err.message}`, true);
+    }
+}
+
+function downloadBundle() {
+    if (!currentBundle) return;
+    const blob = new Blob([JSON.stringify(currentBundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function copyBundle() {
+    if (!currentBundle) return;
+    navigator.clipboard.writeText(JSON.stringify(currentBundle, null, 2)).then(() => {
+        showStatus('Copied to clipboard.', false);
+    });
+}
+
+async function loadEventPicker() {
+    const picker = document.getElementById('event-picker');
+    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+    if (picker.innerHTML) return;
+
+    picker.innerHTML = '<div style="padding:0.5rem; color:var(--text-secondary); font-size:0.85rem;">Loading...</div>';
+    try {
+        const res = await fetch('/api/events');
+        const data = await res.json();
+        const events = data.events || data || [];
+        picker.innerHTML = events.map(evt => {
+            const eid = evt.id || evt.event_id;
+            const title = evt.title || evt.name || `Event #${eid}`;
+            return `<div style="padding:0.4rem 0.6rem; border-bottom:1px solid var(--border); cursor:pointer; font-size:0.82rem;"
+                         onmouseover="this.style.background='rgba(79,143,247,0.08)'"
+                         onmouseout="this.style.background=''"
+                         onclick="document.getElementById('event-id-input').value=${eid}; document.getElementById('event-picker').style.display='none'; exportEvent();">
+                <strong>#${eid}</strong> ${title}
+            </div>`;
+        }).join('') || '<div style="padding:0.5rem; color:var(--text-secondary);">No events found.</div>';
+    } catch (err) {
+        picker.innerHTML = `<div style="padding:0.5rem; color:var(--critical);">Error: ${err.message}</div>`;
+    }
+}
+</script>
+{% endblock %}

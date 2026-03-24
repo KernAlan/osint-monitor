@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Alerts - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Alerts</h2>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div style="display: flex; gap: 0.5rem;">
+        <select id="filter-ack" onchange="loadAlerts()">
+            <option value="">All</option>
+            <option value="false" selected>Unacknowledged</option>
+            <option value="true">Acknowledged</option>
+        </select>
+        <select id="filter-alert-type" onchange="loadAlerts()">
+            <option value="">All Types</option>
+            <option value="keyword">Keyword</option>
+            <option value="anomaly">Anomaly</option>
+            <option value="trend">Trend</option>
+            <option value="threshold">Threshold</option>
+            <option value="compound">Compound</option>
+        </select>
+        <select id="filter-hours-alerts" onchange="loadAlerts()">
+            <option value="24">Last 24h</option>
+            <option value="72" selected>Last 3 days</option>
+            <option value="168">Last 7 days</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div id="alerts-table">Loading...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadAlerts() {
+    const ack = document.getElementById('filter-ack').value;
+    const type = document.getElementById('filter-alert-type').value;
+    const hours = document.getElementById('filter-hours-alerts').value;
+
+    let url = `/api/alerts?hours_back=${hours}&limit=100`;
+    if (ack) url += `&acknowledged=${ack}`;
+    if (type) url += `&alert_type=${type}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    const el = document.getElementById('alerts-table');
+
+    if (data.alerts && data.alerts.length > 0) {
+        el.innerHTML = `<p style="color:var(--text-secondary);margin-bottom:0.5rem">${data.total} alerts</p>
+            <table><tr><th>Severity</th><th>Type</th><th>Title</th><th>Time</th><th>Status</th><th></th></tr>` +
+            data.alerts.map(a => `<tr>
+                <td>${severityBadge(a.severity)}</td>
+                <td>${a.alert_type}</td>
+                <td>${a.title}</td>
+                <td style="font-size:0.8rem">${a.created_at ? new Date(a.created_at).toLocaleString() : '-'}</td>
+                <td>${a.acknowledged ? '<span style="color:var(--low)">ACK</span>' : '<span style="color:var(--critical)">OPEN</span>'}</td>
+                <td>${!a.acknowledged ? `<button onclick="ackAlert(${a.id})" style="padding:0.2rem 0.5rem;font-size:0.75rem">Acknowledge</button>` : ''}</td>
+            </tr>`).join('') + '</table>';
+    } else {
+        el.innerHTML = '<p style="color:var(--text-secondary)">No alerts match the current filters.</p>';
+    }
+}
+
+async function ackAlert(id) {
+    await fetch(`/api/alerts/${id}/acknowledge`, { method: 'POST' });
+    loadAlerts();
+}
+
+loadAlerts();
+</script>
+{% endblock %}

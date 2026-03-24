@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Entity Detail - OSINT Monitor{% endblock %}
+{% block content %}
+<div id="entity-content">Loading entity...</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadEntity() {
+    const entityId = {{ entity_id }};
+    const [entityRes, graphRes, trendRes] = await Promise.all([
+        fetch(`/api/entities/${entityId}`),
+        fetch(`/api/entities/${entityId}/graph?radius=2`),
+        fetch(`/api/entities/${entityId}/trend?days=30`),
+    ]);
+    const entity = await entityRes.json();
+    const graph = await graphRes.json();
+    const trend = await trendRes.json();
+
+    const el = document.getElementById('entity-content');
+    el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+            <a href="/entities" style="font-size:0.9rem">&larr; Back</a>
+            <h2>${entity.canonical_name}</h2>
+            <span class="badge" style="background:var(--border)">${entity.entity_type}</span>
+        </div>
+
+        <div class="grid grid-3" style="margin-bottom:1rem">
+            <div class="card">
+                <div class="stat-label">Aliases</div>
+                <div style="font-size:0.85rem">${(entity.aliases || []).join(', ') || 'None'}</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">First Seen</div>
+                <div style="font-size:0.85rem">${entity.first_seen_at ? new Date(entity.first_seen_at).toLocaleDateString() : '-'}</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">Mentions</div>
+                <div class="stat-value">${entity.mentions ? entity.mentions.length : 0}</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <h2>Mention Trend</h2>
+                <canvas id="entity-trend-chart" height="200"></canvas>
+            </div>
+            <div class="card">
+                <h2>Relationship Graph</h2>
+                <div id="entity-graph" style="height:300px"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem">
+            <h2>Recent Mentions</h2>
+            <table>
+                <tr><th>Source</th><th>Title</th><th>Role</th><th>Published</th></tr>
+                ${(entity.mentions || []).map(m => `<tr>
+                    <td>${m.source}</td>
+                    <td><a href="${m.url}" target="_blank">${m.title}</a></td>
+                    <td>${m.role}</td>
+                    <td style="font-size:0.8rem">${m.published_at ? new Date(m.published_at).toLocaleString() : '-'}</td>
+                </tr>`).join('')}
+            </table>
+        </div>
+    `;
+
+    // Graph visualization
+    if (graph.nodes && graph.nodes.length > 0) {
+        const nodes = new vis.DataSet(graph.nodes.map(n => ({
+            id: n.id, label: n.name,
+            color: n.id === entityId ? '#4f8ff7' : '#8b92a8',
+            font: { color: '#e4e7f0' },
+        })));
+        const edges = new vis.DataSet((graph.edges || []).map(e => ({
+            from: e.source, to: e.target, label: e.type || '',
+            color: { color: '#2d3148' }, font: { color: '#8b92a8', size: 10 },
+        })));
+        new vis.Network(document.getElementById('entity-graph'), { nodes, edges }, {
+            physics: { stabilization: { iterations: 50 } },
+            nodes: { shape: 'dot', size: 12 },
+        });
+    }
+}
+loadEntity();
+</script>
+{% endblock %}

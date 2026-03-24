@@ -1,16 +1,24 @@
 #!/bin/bash
 # OSINT Monitor Runner
-# Usage: ./run.sh [--alerts-only]
+# Usage:
+#   ./run.sh                  # Run collection pipeline
+#   ./run.sh collect          # Run collection pipeline
+#   ./run.sh briefing         # Generate daily briefing
+#   ./run.sh serve            # Start web dashboard
+#   ./run.sh daemon           # Start background scheduler
+#   ./run.sh alerts           # Quick alert check
+#   ./run.sh --alerts-only    # Legacy: quick alert check
 
-cd /root/.openclaw/workspace/osint-monitor
-source venv/bin/activate
+cd "$(dirname "$0")"
+
+# Activate venv if present
+if [ -d "venv" ]; then
+    source venv/bin/activate
+fi
 
 if [ "$1" == "--alerts-only" ]; then
-    # Quick alert check (no synthesis)
-    python main.py 2>/dev/null
-    python synthesize.py --alerts
+    # Legacy compatibility
+    python main.py alerts
 else
-    # Full collection and synthesis
-    python main.py
-    python synthesize.py
+    python main.py "$@"
 fi

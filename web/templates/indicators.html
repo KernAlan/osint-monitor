@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}I&W Scenarios - OSINT Monitor{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Indications & Warning Scenarios</h2>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+    <label style="font-size: 0.85rem; color: var(--text-secondary);">Look-back:</label>
+    <select id="hours-back" onchange="loadScenarios()">
+        <option value="24">24 hours</option>
+        <option value="72" selected>72 hours</option>
+        <option value="168">7 days</option>
+        <option value="720">30 days</option>
+    </select>
+    <label style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 0.5rem;">
+        <input type="checkbox" id="use-llm" style="margin-right: 0.3rem;">LLM Scoring
+    </label>
+    <button onclick="loadScenarios()" style="margin-left: 0.5rem;">Refresh</button>
+</div>
+
+<div id="scenarios-container">
+    <div class="card" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+        Loading scenarios...
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STATUS_COLORS = {
+    ELEVATED: 'var(--critical)',
+    WARNING:  'var(--high)',
+    WATCH:    'var(--medium)',
+    BASELINE: 'var(--low)',
+};
+const STATUS_BG = {
+    ELEVATED: 'rgba(255,71,87,0.15)',
+    WARNING:  'rgba(255,140,66,0.15)',
+    WATCH:    'rgba(255,193,7,0.12)',
+    BASELINE: 'rgba(40,199,111,0.10)',
+};
+
+function statusBadge(status) {
+    const color = STATUS_COLORS[status] || 'var(--text-secondary)';
+    return `<span class="badge" style="background:${color}; color:${status === 'WATCH' ? '#1a1d29' : 'white'}">${status}</span>`;
+}
+
+async function loadScenarios() {
+    const hours = document.getElementById('hours-back').value;
+    const container = document.getElementById('scenarios-container');
+    container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">Loading scenarios...</div>';
+
+    try {
+        const useLlm = document.getElementById('use-llm').checked;
+        const res = await fetch(`/api/intel/indicators?hours_back=${hours}&use_llm=${useLlm}`);
+        const data = await res.json();
+        const scenarios = data.scenarios || [];
+
+        if (scenarios.length === 0) {
+            container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">No scenarios configured.</div>';
+            return;
+        }
+
+        container.innerHTML = '';
+        for (const sc of scenarios) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.borderLeft = `4px solid ${STATUS_COLORS[sc.status] || 'var(--border)'}`;
+            card.style.background = STATUS_BG[sc.status] || 'var(--bg-card)';
+
+            const triggeredCount = (sc.triggered_indicators || []).length;
+            const untriggeredCount = (sc.untriggered_indicators || []).length;
+            const totalIndicators = triggeredCount + untriggeredCount;
+
+            // Build triggered indicators with evidence
+            const triggeredHtml = (sc.triggered_indicators || []).map(ind => {
+                const indName = ind.name || ind.indicator || ind;
+                const evidenceItems = ind.evidence || [];
+                let evidenceHtml = '';
+                if (evidenceItems.length > 0) {
+                    evidenceHtml = `<div style="margin-left:1.2rem; margin-top:0.3rem; margin-bottom:0.5rem;">
+                        ${evidenceItems.map(ev => `
+                            <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.2rem; padding-left:0.5rem; border-left:2px solid var(--border);">
+                                ${ev.title || ev.summary || 'Evidence item'}
+                                <span style="margin-left:0.4rem; font-size:0.7rem;">${ev.source || ''}</span>
+                                ${ev.date || ev.published_at ? `<span style="margin-left:0.4rem; font-size:0.7rem;">${ev.date || new Date(ev.published_at).toLocaleDateString()}</span>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>`;
+                } else if (ind.evidence_count != null && ind.evidence_count > 0) {
+                    evidenceHtml = `<div style="margin-left:1.2rem; font-size:0.8rem; color:var(--text-secondary);">${ind.evidence_count} evidence item(s)</div>`;
+                }
+
+                return `
+                    <div style="margin-bottom:0.5rem;">
+                        <div style="display:flex; align-items:center; gap:0.4rem;">
+                            <span style="color:var(--critical); font-weight:bold;">&#10003;</span>
+                            <span style="font-size:0.85rem; font-weight:600;">TRIGGERED</span>
+                            <span style="font-size:0.85rem; margin-left:0.3rem;">${indName}</span>
+                        </div>
+                        ${evidenceHtml}
+                    </div>
+                `;
+            }).join('');
+
+            const untriggeredHtml = (sc.untriggered_indicators || []).map(ind => `
+                <div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.3rem; opacity:0.4;">
+                    <span style="color:var(--text-secondary);">&#9744;</span>
+                    <span style="font-size:0.85rem;">NOT TRIGGERED</span>
+                    <span style="font-size:0.85rem; margin-left:0.3rem;">${ind.name || ind.indicator || ind}</span>
+                </div>
+            `).join('');
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1rem;">
+                    <div>
+                        <h2 style="margin-bottom:0.3rem;">${sc.scenario || sc.name || sc.scenario_key || 'Scenario'}</h2>
+                        <span style="font-size:0.8rem; color:var(--text-secondary);">${sc.description || ''}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        ${statusBadge(sc.status || 'BASELINE')}
+                        <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.3rem;">
+                            ${triggeredCount} of ${totalIndicators} indicators triggered
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="margin-bottom:0.5rem; color:var(--text-secondary); font-size:0.8rem; text-transform:uppercase;">Evidence Board</h3>
+                    ${triggeredHtml || '<span style="font-size:0.85rem; color:var(--text-secondary);">No indicators triggered</span>'}
+                    ${untriggeredHtml}
+                </div>
+            `;
+            container.appendChild(card);
+        }
+    } catch (err) {
+        container.innerHTML = `<div class="card" style="color:var(--critical);">Error loading scenarios: ${err.message}</div>`;
+    }
+}
+
+// Initial load
+loadScenarios();
+</script>
+{% endblock %}

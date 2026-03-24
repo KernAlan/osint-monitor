@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Claim Browser - OSINT Monitor{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Claim Browser</h2>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
+    <label style="font-size: 0.85rem; color: var(--text-secondary);">Filter type:</label>
+    <select id="type-filter" onchange="filterClaims()">
+        <option value="ALL">All Types</option>
+        <option value="CONFIRMED">Confirmed</option>
+        <option value="ASSERTIONS">Assertions</option>
+        <option value="DENIALS">Denials</option>
+        <option value="THREATS">Threats</option>
+        <option value="ACCUSATIONS">Accusations</option>
+    </select>
+    <button onclick="loadAllClaims()" style="margin-left: 0.5rem;">Refresh</button>
+    <span id="claim-count" style="margin-left: auto; font-size: 0.8rem; color: var(--text-secondary);"></span>
+</div>
+
+<div id="claims-container">
+    <div class="card" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+        Loading events and claims...
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .claim-type-tag {
+        display: inline-block;
+        padding: 0.1rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .claim-card {
+        padding: 0.8rem;
+        border-radius: 6px;
+        border-left: 3px solid var(--border);
+        margin-bottom: 0.5rem;
+        background: var(--bg-secondary);
+    }
+    .event-group { margin-bottom: 1.5rem; }
+    .event-group-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.6rem;
+        cursor: pointer;
+    }
+    .event-group-header:hover h3 { color: var(--accent); }
+    .collapse-icon { transition: transform 0.2s; font-size: 0.7rem; }
+    .collapsed .collapse-icon { transform: rotate(-90deg); }
+    .collapsed .event-claims { display: none; }
+</style>
+
+<script>
+const TYPE_COLORS = {
+    CONFIRMED:   { bg: 'rgba(40,199,111,0.15)', border: 'var(--low)',      text: '#28c76f' },
+    ASSERTIONS:  { bg: 'rgba(228,231,240,0.08)', border: 'var(--text-primary)', text: 'var(--text-primary)' },
+    DENIALS:     { bg: 'rgba(255,71,87,0.12)',   border: 'var(--critical)', text: '#ff4757' },
+    THREATS:     { bg: 'rgba(255,140,66,0.12)',  border: 'var(--high)',     text: '#ff8c42' },
+    ACCUSATIONS: { bg: 'rgba(255,193,7,0.12)',   border: 'var(--medium)',   text: '#ffc107' },
+};
+
+function typeTag(type) {
+    const c = TYPE_COLORS[type] || TYPE_COLORS.ASSERTIONS;
+    return `<span class="claim-type-tag" style="background:${c.bg}; color:${c.text}; border:1px solid ${c.border};">${type}</span>`;
+}
+
+function classifyClaim(claim) {
+    // Try to derive type from stance data
+    const stance = (claim.stance || claim.type || '').toUpperCase();
+    if (stance.includes('CONFIRM') || stance.includes('AGREE')) return 'CONFIRMED';
+    if (stance.includes('DENY') || stance.includes('DISAGREE') || stance.includes('REJECT')) return 'DENIALS';
+    if (stance.includes('THREAT') || stance.includes('WARN')) return 'THREATS';
+    if (stance.includes('ACCUS') || stance.includes('BLAME')) return 'ACCUSATIONS';
+    return 'ASSERTIONS';
+}
+
+let allEventsData = [];
+
+async function loadAllClaims() {
+    const container = document.getElementById('claims-container');
+    container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">Loading events and claims...</div>';
+    allEventsData = [];
+
+    try {
+        const eventsRes = await fetch('/api/events');
+        const eventsData = await eventsRes.json();
+        const events = eventsData.events || eventsData || [];
+
+        if (events.length === 0) {
+            container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">No events found.</div>';
+            return;
+        }
+
+        // Fetch stance data for each event (in parallel, max 10 concurrent)
+        const batchSize = 10;
+        for (let i = 0; i < events.length; i += batchSize) {
+            const batch = events.slice(i, i + batchSize);
+            const promises = batch.map(async (evt) => {
+                const eid = evt.id || evt.event_id;
+                try {
+                    const stanceRes = await fetch(`/api/intel/stance/${eid}`);
+                    const stanceData = await stanceRes.json();
+                    return { event: evt, stances: stanceData.stances || [] };
+                } catch {
+                    return { event: evt, stances: [] };
+                }
+            });
+            const results = await Promise.all(promises);
+            allEventsData.push(...results);
+        }
+
+        renderClaims();
+    } catch (err) {
+        container.innerHTML = `<div class="card" style="color:var(--critical);">Error: ${err.message}</div>`;
+    }
+}
+
+function renderClaims() {
+    const container = document.getElementById('claims-container');
+    const typeFilter = document.getElementById('type-filter').value;
+    container.innerHTML = '';
+    let totalClaims = 0;
+
+    for (const { event, stances } of allEventsData) {
+        if (stances.length === 0) continue;
+
+        // Classify each claim
+        const classified = stances.map(s => ({
+            ...s,
+            _type: classifyClaim(s),
+        }));
+
+        // Filter
+        const filtered = typeFilter === 'ALL' ? classified : classified.filter(c => c._type === typeFilter);
+        if (filtered.length === 0) continue;
+
+        totalClaims += filtered.length;
+        const eid = event.id || event.event_id;
+        const title = event.title || event.name || `Event #${eid}`;
+
+        // Group by type
+        const groups = {};
+        for (const c of filtered) {
+            if (!groups[c._type]) groups[c._type] = [];
+            groups[c._type].push(c);
+        }
+
+        const groupHtml = Object.entries(groups).map(([type, claims]) => `
+            <div style="margin-bottom:0.6rem;">
+                ${typeTag(type)} <span style="font-size:0.75rem; color:var(--text-secondary);">(${claims.length})</span>
+                ${claims.map(c => {
+                    const tc = TYPE_COLORS[type] || TYPE_COLORS.ASSERTIONS;
+                    return `<div class="claim-card" style="border-left-color:${tc.border};">
+                        <div style="font-size:0.85rem; margin-bottom:0.3rem;">${c.claim || c.text || c.description || 'No claim text'}</div>
+                        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                            ${c.source ? `<span style="font-size:0.75rem; color:var(--accent);">${c.source}</span>` : ''}
+                            ${c.confidence != null ? `<span style="font-size:0.75rem; color:var(--text-secondary);">Confidence: ${(c.confidence * 100).toFixed(0)}%</span>` : ''}
+                            ${c.agreement_count != null ? `<span style="font-size:0.75rem; color:var(--low);">${c.agreement_count} agree</span>` : ''}
+                            ${c.disagreement_count != null ? `<span style="font-size:0.75rem; color:var(--critical);">${c.disagreement_count} disagree</span>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        `).join('');
+
+        const eventCard = document.createElement('div');
+        eventCard.className = 'event-group';
+        eventCard.innerHTML = `
+            <div class="event-group-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span class="collapse-icon">&#9660;</span>
+                <h3 style="font-size:0.95rem; margin:0;">${title}</h3>
+                <span style="font-size:0.75rem; color:var(--text-secondary);">${filtered.length} claims</span>
+                <a href="/events/${eid}" style="margin-left:auto; font-size:0.75rem;">View Event</a>
+            </div>
+            <div class="event-claims" style="padding-left:1rem;">
+                ${groupHtml}
+            </div>
+        `;
+        container.appendChild(eventCard);
+    }
+
+    document.getElementById('claim-count').textContent = `${totalClaims} claims across ${container.children.length} events`;
+
+    if (totalClaims === 0) {
+        container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">No claims found for the selected filter.</div>';
+    }
+}
+
+function filterClaims() {
+    if (allEventsData.length > 0) {
+        renderClaims();
+    }
+}
+
+loadAllClaims();
+</script>
+{% endblock %}

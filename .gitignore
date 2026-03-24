@@ -6,11 +6,18 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.eggs/
 
 # Data (keep structure, ignore content)
 data/*.json
 data/*.md
-!.gitkeep
+data/*.db
+data/telegram_session*
+!data/.gitkeep
+
+# Export directory IS tracked (JSON snapshots for git)
+!data/export/
+!data/export/*.json
 
 # Environment
 .env
@@ -24,3 +31,7 @@ data/*.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Models (large binary downloads)
+*.bin
+*.onnx

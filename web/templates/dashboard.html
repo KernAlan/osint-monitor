@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Intelligence Dashboard</h2>
+
+<div id="live-alerts"></div>
+
+<!-- Stats row -->
+<div class="grid grid-4" id="stats-row">
+    <div class="card">
+        <div class="stat-label">Events (24h)</div>
+        <div class="stat-value" id="stat-events">-</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Active Alerts</div>
+        <div class="stat-value severity-critical" id="stat-alerts">-</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Entities Tracked</div>
+        <div class="stat-value" id="stat-entities">-</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Items Collected (24h)</div>
+        <div class="stat-value" id="stat-items">-</div>
+    </div>
+</div>
+
+<!-- Two column layout -->
+<div class="grid grid-2">
+    <!-- Recent Alerts -->
+    <div class="card">
+        <h2>Recent Alerts</h2>
+        <div id="recent-alerts">Loading...</div>
+    </div>
+
+    <!-- Top Events -->
+    <div class="card">
+        <h2>Top Events</h2>
+        <div id="top-events">Loading...</div>
+    </div>
+</div>
+
+<!-- Trend chart -->
+<div class="card">
+    <h2>Activity Trend (7 days)</h2>
+    <canvas id="trend-chart" height="200"></canvas>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    // Load stats
+    try {
+        const [eventsRes, alertsRes, entitiesRes] = await Promise.all([
+            fetch('/api/events?hours_back=24&limit=1'),
+            fetch('/api/alerts?hours_back=24&acknowledged=false'),
+            fetch('/api/entities?limit=1'),
+        ]);
+        const events = await eventsRes.json();
+        const alerts = await alertsRes.json();
+        const entities = await entitiesRes.json();
+
+        document.getElementById('stat-events').textContent = events.total || 0;
+        document.getElementById('stat-alerts').textContent = alerts.total || 0;
+        document.getElementById('stat-entities').textContent = entities.total || 0;
+    } catch(e) { console.error('Stats error:', e); }
+
+    // Load recent alerts (keep severity -- operational priority)
+    try {
+        const res = await fetch('/api/alerts?limit=10&hours_back=72');
+        const data = await res.json();
+        const el = document.getElementById('recent-alerts');
+        if (data.alerts && data.alerts.length > 0) {
+            el.innerHTML = '<table><tr><th>Severity</th><th>Title</th><th>Time</th></tr>' +
+                data.alerts.map(a => `<tr>
+                    <td>${severityBadge(a.severity)}</td>
+                    <td>${a.title}</td>
+                    <td style="color:var(--text-secondary);font-size:0.8rem">${a.created_at ? new Date(a.created_at).toLocaleString() : ''}</td>
+                </tr>`).join('') + '</table>';
+        } else {
+            el.innerHTML = '<p style="color:var(--text-secondary)">No recent alerts</p>';
+        }
+    } catch(e) { document.getElementById('recent-alerts').textContent = 'Error loading alerts'; }
+
+    // Load top events -- cached corroboration from event response, no extra API calls
+    try {
+        const res = await fetch('/api/events?limit=10&hours_back=72');
+        const data = await res.json();
+        const el = document.getElementById('top-events');
+        if (data.events && data.events.length > 0) {
+            el.innerHTML = '<table><tr><th>Event</th><th>Sources</th><th>Status</th><th>Region</th><th>Updated</th></tr>' +
+                data.events.map(e => `<tr>
+                    <td><a href="/events/${e.id}">${e.summary.substring(0, 80)}</a></td>
+                    <td>${sourceCountLabel(e.source_count)}</td>
+                    <td>${statusBadgeFromCorroboration(e)}</td>
+                    <td>${e.region || '-'}</td>
+                    <td style="font-size:0.8rem;color:var(--text-secondary)">${e.last_updated_at ? new Date(e.last_updated_at).toLocaleString() : '-'}</td>
+                </tr>`).join('') + '</table>';
+        } else {
+            el.innerHTML = '<p style="color:var(--text-secondary)">No events yet. Run the pipeline first.</p>';
+        }
+    } catch(e) { document.getElementById('top-events').textContent = 'Error loading events'; }
+}
+
+loadDashboard();
+// Refresh every 60 seconds
+setInterval(loadDashboard, 60000);
+</script>
+{% endblock %}

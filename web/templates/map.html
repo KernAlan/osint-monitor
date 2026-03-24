@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Map - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Event Map</h2>
+<div class="card">
+    <div id="map"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const map = L.map('map').setView([30, 40], 3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+async function loadMapEvents() {
+    const res = await fetch('/api/events?hours_back=168&limit=200');
+    const data = await res.json();
+
+    (data.events || []).forEach(e => {
+        if (e.lat && e.lon) {
+            const color = e.severity >= 0.9 ? '#ff4757' : e.severity >= 0.7 ? '#ff8c42' : e.severity >= 0.4 ? '#ffc107' : '#28c76f';
+            const circle = L.circleMarker([e.lat, e.lon], {
+                radius: 6 + e.severity * 10,
+                fillColor: color,
+                color: color,
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: 0.5,
+            }).addTo(map);
+            circle.bindPopup(`<b>${e.summary}</b><br>Severity: ${e.severity.toFixed(2)}<br>Region: ${e.region || 'Unknown'}<br><a href="/events/${e.id}">Details</a>`);
+        }
+    });
+}
+loadMapEvents();
+</script>
+{% endblock %}

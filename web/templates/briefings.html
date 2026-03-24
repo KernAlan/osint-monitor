@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Briefings - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Intelligence Briefings</h2>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <select id="briefing-type">
+            <option value="daily">Daily Briefing</option>
+            <option value="flash">Flash Briefing</option>
+        </select>
+        <select id="briefing-provider">
+            <option value="">Default (OpenAI)</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic Claude</option>
+            <option value="ollama">Ollama (Local)</option>
+        </select>
+        <button onclick="generateBriefing()" id="gen-btn">Generate New Briefing</button>
+        <span id="gen-status" style="color:var(--text-secondary);font-size:0.85rem"></span>
+    </div>
+</div>
+
+<div class="grid grid-3" style="margin-bottom: 1rem;">
+    <div class="card" style="grid-column: 1;" id="briefing-list">
+        <h2>Previous Briefings</h2>
+        <div id="briefings-nav">Loading...</div>
+    </div>
+    <div class="card" style="grid-column: 2 / 4;" id="briefing-content">
+        <h2>Briefing Content</h2>
+        <div id="briefing-body" class="markdown-body" style="padding-top:0.5rem">
+            <p style="color:var(--text-secondary)">Select a briefing or generate a new one.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadBriefingList() {
+    const res = await fetch('/api/briefings?limit=20');
+    const data = await res.json();
+    const el = document.getElementById('briefings-nav');
+
+    if (data.briefings && data.briefings.length > 0) {
+        el.innerHTML = data.briefings.map(b => `
+            <div onclick="loadBriefing(${b.id})" style="padding:0.5rem;cursor:pointer;border-bottom:1px solid var(--border);font-size:0.85rem;">
+                <strong>${b.briefing_type.toUpperCase()}</strong><br>
+                <span style="color:var(--text-secondary)">${b.created_at ? new Date(b.created_at).toLocaleString() : ''}</span><br>
+                <span style="font-size:0.8rem">${b.model_used || ''}</span>
+            </div>
+        `).join('');
+    } else {
+        el.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem">No briefings yet.</p>';
+    }
+}
+
+async function loadBriefing(id) {
+    const res = await fetch(`/api/briefings/${id}`);
+    const data = await res.json();
+    document.getElementById('briefing-body').innerHTML = marked.parse(data.content_md || '');
+}
+
+async function generateBriefing() {
+    const btn = document.getElementById('gen-btn');
+    const status = document.getElementById('gen-status');
+    const type = document.getElementById('briefing-type').value;
+    const provider = document.getElementById('briefing-provider').value;
+
+    btn.disabled = true;
+    status.textContent = 'Generating...';
+
+    try {
+        const res = await fetch(`/api/briefings/generate?briefing_type=${type}&provider=${provider || ''}`, { method: 'POST' });
+        const data = await res.json();
+
+        if (data.error) {
+            status.textContent = `Error: ${data.error}`;
+        } else {
+            status.textContent = 'Done!';
+            document.getElementById('briefing-body').innerHTML = marked.parse(data.content_md || '');
+            loadBriefingList();
+        }
+    } catch(e) {
+        status.textContent = `Error: ${e.message}`;
+    }
+    btn.disabled = false;
+}
+
+loadBriefingList();
+</script>
+{% endblock %}

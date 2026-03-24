@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Graph Explorer - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Entity Relationship Graph</h2>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="graph-search" placeholder="Search entity to center on..." style="flex:1">
+        <button onclick="searchEntity()">Explore</button>
+    </div>
+</div>
+
+<div class="card">
+    <div id="graph-container"></div>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Most Connected Entities</h2>
+    <div id="top-entities">Loading...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let network = null;
+
+async function searchEntity() {
+    const query = document.getElementById('graph-search').value;
+    if (!query) return;
+
+    const res = await fetch(`/api/entities?search=${encodeURIComponent(query)}&limit=1`);
+    const data = await res.json();
+
+    if (data.entities && data.entities.length > 0) {
+        loadGraph(data.entities[0].id);
+    }
+}
+
+async function loadGraph(entityId) {
+    const res = await fetch(`/api/entities/${entityId}/graph?radius=2`);
+    const data = await res.json();
+
+    if (!data.nodes || data.nodes.length === 0) return;
+
+    const typeColors = {
+        PERSON: '#4f8ff7',
+        ORG: '#ff8c42',
+        GPE: '#28c76f',
+        WEAPON_SYSTEM: '#ff4757',
+        FACILITY: '#ffc107',
+        EVENT: '#9c88ff',
+    };
+
+    const nodes = new vis.DataSet(data.nodes.map(n => ({
+        id: n.id,
+        label: n.name,
+        color: { background: typeColors[n.type] || '#8b92a8', border: '#2d3148' },
+        font: { color: '#e4e7f0', size: 12 },
+        shape: 'dot',
+        size: n.id === entityId ? 20 : 12,
+    })));
+
+    const edges = new vis.DataSet((data.edges || []).map((e, i) => ({
+        id: i,
+        from: e.source,
+        to: e.target,
+        label: e.type !== 'co_occurrence' ? e.type : '',
+        color: { color: '#2d3148', highlight: '#4f8ff7' },
+        font: { color: '#8b92a8', size: 9 },
+        width: Math.min(e.weight || 1, 5),
+    })));
+
+    const container = document.getElementById('graph-container');
+    network = new vis.Network(container, { nodes, edges }, {
+        physics: {
+            forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01 },
+            solver: 'forceAtlas2Based',
+            stabilization: { iterations: 100 },
+        },
+        interaction: { hover: true, tooltipDelay: 200 },
+    });
+
+    network.on('doubleClick', function(params) {
+        if (params.nodes.length > 0) {
+            loadGraph(params.nodes[0]);
+        }
+    });
+}
+
+async function loadTopEntities() {
+    const res = await fetch('/api/entities?limit=20');
+    const data = await res.json();
+    const el = document.getElementById('top-entities');
+
+    if (data.entities && data.entities.length > 0) {
+        el.innerHTML = '<table><tr><th>Entity</th><th>Type</th><th>Mentions</th><th></th></tr>' +
+            data.entities.map(e => `<tr>
+                <td>${e.canonical_name}</td>
+                <td>${e.entity_type}</td>
+                <td>${e.mention_count}</td>
+                <td><button onclick="loadGraph(${e.id})" style="padding:0.2rem 0.5rem;font-size:0.75rem">Explore</button></td>
+            </tr>`).join('') + '</table>';
+    }
+}
+loadTopEntities();
+</script>
+{% endblock %}

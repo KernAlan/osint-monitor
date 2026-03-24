@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OSINT Monitor{% endblock %}</title>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- vis.js (network graph) -->
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <!-- Marked (markdown rendering) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d29;
+            --bg-card: #222639;
+            --text-primary: #e4e7f0;
+            --text-secondary: #8b92a8;
+            --accent: #4f8ff7;
+            --critical: #ff4757;
+            --high: #ff8c42;
+            --medium: #ffc107;
+            --low: #28c76f;
+            --border: #2d3148;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            min-height: 100vh;
+        }
+        /* Sidebar */
+        .sidebar {
+            width: 220px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .sidebar h1 {
+            font-size: 1.1rem;
+            padding: 0 1.2rem 1rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+        .sidebar a {
+            display: block;
+            padding: 0.6rem 1.2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            color: var(--text-primary);
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+        }
+        .sidebar .section-label {
+            padding: 0.8rem 1.2rem 0.3rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+        /* Main content */
+        .main {
+            margin-left: 220px;
+            flex: 1;
+            padding: 1.5rem;
+            min-height: 100vh;
+        }
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+        }
+        .card h2 { font-size: 1rem; margin-bottom: 0.8rem; }
+        .card h3 { font-size: 0.9rem; color: var(--text-secondary); }
+        /* Grid */
+        .grid { display: grid; gap: 1rem; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+        /* Stats */
+        .stat-value { font-size: 2rem; font-weight: bold; color: var(--accent); }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); }
+        /* Severity badges */
+        .severity-critical { color: var(--critical); }
+        .severity-high { color: var(--high); }
+        .severity-medium { color: var(--medium); }
+        .severity-low { color: var(--low); }
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-critical { background: var(--critical); color: white; }
+        .badge-high { background: var(--high); color: white; }
+        .badge-medium { background: var(--medium); color: #1a1d29; }
+        .badge-low { background: var(--low); color: white; }
+        .badge-confirmed { background: var(--low); color: white; }
+        .badge-disputed { background: var(--high); color: white; }
+        .badge-unverified { background: var(--text-secondary); color: white; }
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; }
+        td { font-size: 0.85rem; }
+        tr:hover { background: rgba(79, 143, 247, 0.05); }
+        /* Alert banner */
+        .alert-banner {
+            background: rgba(255, 71, 87, 0.15);
+            border: 1px solid var(--critical);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        /* Links */
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        /* Form elements */
+        input, select, button {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem 0.8rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        button {
+            background: var(--accent);
+            border-color: var(--accent);
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { opacity: 0.9; }
+        /* Map */
+        #map { height: 500px; border-radius: 8px; }
+        /* Graph */
+        #graph-container { height: 600px; border-radius: 8px; background: var(--bg-secondary); }
+        /* Markdown content */
+        .markdown-body { line-height: 1.6; }
+        .markdown-body h1 { font-size: 1.4rem; margin: 1rem 0 0.5rem; }
+        .markdown-body h2 { font-size: 1.2rem; margin: 1rem 0 0.5rem; color: var(--accent); }
+        .markdown-body h3 { font-size: 1rem; margin: 0.8rem 0 0.4rem; }
+        .markdown-body ul { padding-left: 1.5rem; }
+        .markdown-body li { margin-bottom: 0.3rem; }
+        .markdown-body p { margin-bottom: 0.6rem; }
+        /* Loading indicator */
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline-block; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <h1>OSINT Monitor</h1>
+        <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Dashboard</a>
+        <a href="/events" {% if '/events' in request.url.path %}class="active"{% endif %}>Events</a>
+        <a href="/entities" {% if '/entities' in request.url.path %}class="active"{% endif %}>Entities</a>
+        <a href="/alerts" {% if '/alerts' in request.url.path %}class="active"{% endif %}>Alerts</a>
+        <div class="section-label">Analysis</div>
+        <a href="/briefings" {% if '/briefings' in request.url.path %}class="active"{% endif %}>Briefings</a>
+        <a href="/indicators" {% if '/indicators' in request.url.path %}class="active"{% endif %}>I&W Scenarios</a>
+        <a href="/claims" {% if '/claims' in request.url.path %}class="active"{% endif %}>Claims</a>
+        <a href="/timeline" {% if '/timeline' in request.url.path %}class="active"{% endif %}>Timeline</a>
+        <a href="/map" {% if '/map' in request.url.path %}class="active"{% endif %}>Map</a>
+        <a href="/graph" {% if '/graph' in request.url.path %}class="active"{% endif %}>Graph Explorer</a>
+        <div class="section-label">System</div>
+        <a href="/stix" {% if '/stix' in request.url.path %}class="active"{% endif %}>STIX Export</a>
+        <a href="/docs" target="_blank">API Docs</a>
+    </nav>
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // SSE for live updates
+        const evtSource = new EventSource('/api/stream');
+        evtSource.addEventListener('alert', function(e) {
+            const data = JSON.parse(e.data);
+            // Show notification banner
+            const banner = document.getElementById('live-alerts');
+            if (banner) {
+                banner.innerHTML = `<div class="alert-banner">
+                    <strong>${data.title}</strong>
+                </div>` + banner.innerHTML;
+            }
+        });
+
+        // Severity badge helper - used only for alert severity (operational priority)
+        function severityBadge(severity) {
+            if (severity >= 0.9) return '<span class="badge badge-critical">CRITICAL</span>';
+            if (severity >= 0.7) return '<span class="badge badge-high">HIGH</span>';
+            if (severity >= 0.4) return '<span class="badge badge-medium">MEDIUM</span>';
+            return '<span class="badge badge-low">LOW</span>';
+        }
+
+        // Corroboration status badge for events
+        function statusBadgeFromCorroboration(corroboration) {
+            if (!corroboration) return '<span class="badge badge-unverified">UNVERIFIED</span>';
+            const level = (corroboration.corroboration_level || corroboration.level || corroboration.status || 'UNVERIFIED').toUpperCase();
+            const rating = corroboration.admiralty_rating || '';
+            const label = rating ? `${rating} ${level}` : level;
+            if (level === 'CONFIRMED' || level === 'PROBABLE') return `<span class="badge badge-confirmed">${label}</span>`;
+            if (level === 'DISPUTED' || level === 'POSSIBLE' || level === 'DOUBTFUL') return `<span class="badge badge-disputed">${label}</span>`;
+            return `<span class="badge badge-unverified">${label}</span>`;
+        }
+
+        // Source count label for events
+        function sourceCountLabel(count) {
+            if (count == null) return '<span style="color:var(--text-secondary)">-</span>';
+            return `<span style="font-weight:600">${count}</span>`;
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

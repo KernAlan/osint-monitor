@@ -1,0 +1,69 @@
+# Alert configuration
+# Updated: 2026-03-16
+
+rules:
+  # Compound rules (entity + keyword co-occurrence)
+  - name: "Iran nuclear escalation"
+    type: compound
+    conditions:
+      entity: "Iran"
+      keyword: "nuclear"
+    severity: 0.9
+    cooldown_minutes: 120
+    channels: ["desktop", "slack"]
+
+  - name: "China Taiwan military"
+    type: compound
+    conditions:
+      entity: "Taiwan"
+      keyword: "military"
+    severity: 0.85
+    cooldown_minutes: 120
+    channels: ["desktop"]
+
+  - name: "Russia nuclear"
+    type: compound
+    conditions:
+      entity: "Russia"
+      keyword: "nuclear"
+    severity: 0.95
+    cooldown_minutes: 60
+    channels: ["desktop", "slack"]
+
+channels:
+  - type: desktop
+    enabled: true
+    config: {}
+
+  # Uncomment and configure as needed:
+  # - type: slack
+  #   enabled: false
+  #   config:
+  #     webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+  # - type: discord
+  #   enabled: false
+  #   config:
+  #     webhook_url: "https://discord.com/api/webhooks/YOUR/WEBHOOK"
+
+  # - type: email
+  #   enabled: false
+  #   config:
+  #     smtp_host: "smtp.gmail.com"
+  #     smtp_port: 587
+  #     username: "your-email@gmail.com"
+  #     password: "app-password"
+  #     from_addr: "your-email@gmail.com"
+  #     to_addrs: ["recipient@example.com"]
+  #     use_tls: true
+
+  # - type: webhook
+  #   enabled: false
+  #   config:
+  #     url: "https://your-webhook-endpoint.com/alerts"
+
+quiet_hours:
+  start: "23:00"
+  end: "06:00"
+
+default_cooldown_minutes: 240

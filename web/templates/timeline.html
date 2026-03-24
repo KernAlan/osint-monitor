@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Event Timeline - OSINT Monitor{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Event Timeline</h2>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
+    <label style="font-size: 0.85rem; color: var(--text-secondary);">Event ID:</label>
+    <input type="number" id="event-id-input" placeholder="Enter event ID" style="width: 140px;"
+           onkeydown="if(event.key==='Enter') loadTimeline()">
+    <button onclick="loadTimeline()">Load Timeline</button>
+    <button onclick="loadEventList()" style="background: var(--bg-secondary); border-color: var(--border);">Browse Events</button>
+</div>
+
+<!-- Event picker (hidden by default) -->
+<div id="event-picker" style="display: none;" class="card">
+    <h3 style="margin-bottom: 0.5rem;">Select an Event</h3>
+    <div id="event-list" style="max-height: 300px; overflow-y: auto;"></div>
+</div>
+
+<!-- Timeline container -->
+<div id="timeline-container">
+    <div class="card" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+        Enter an event ID above or browse events to view a timeline.
+    </div>
+</div>
+
+<!-- Propagation container -->
+<div id="propagation-container"></div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .tl-item {
+        position: relative;
+        padding: 0.8rem 1rem 0.8rem 2.5rem;
+        border-left: 2px solid var(--border);
+        margin-left: 1rem;
+    }
+    .tl-item::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 1.1rem;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--bg-primary);
+    }
+    .tl-item.first-reporter::before {
+        background: var(--critical);
+        width: 14px;
+        height: 14px;
+        left: -8px;
+        top: 1rem;
+    }
+    .tl-item.first-reporter {
+        border-left-color: var(--critical);
+    }
+    .tl-delay {
+        position: relative;
+        padding: 0.2rem 1rem 0.2rem 2.5rem;
+        border-left: 2px dashed var(--border);
+        margin-left: 1rem;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    .event-pick-row {
+        padding: 0.5rem 0.8rem;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        font-size: 0.85rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .event-pick-row:hover { background: rgba(79,143,247,0.08); }
+</style>
+
+<script>
+function formatDelay(ms) {
+    if (ms == null) return '';
+    const seconds = Math.abs(ms) / 1000;
+    if (seconds < 60) return `${seconds.toFixed(0)}s`;
+    if (seconds < 3600) return `${(seconds / 60).toFixed(0)}m`;
+    if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+    return `${(seconds / 86400).toFixed(1)}d`;
+}
+
+function formatTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+async function loadEventList() {
+    const picker = document.getElementById('event-picker');
+    const list = document.getElementById('event-list');
+    picker.style.display = 'block';
+    list.innerHTML = '<div style="color:var(--text-secondary); padding:1rem;">Loading...</div>';
+
+    try {
+        const res = await fetch('/api/events');
+        const data = await res.json();
+        const events = data.events || data || [];
+
+        if (events.length === 0) {
+            list.innerHTML = '<div style="color:var(--text-secondary); padding:1rem;">No events found.</div>';
+            return;
+        }
+
+        list.innerHTML = events.map(evt => {
+            const eid = evt.id || evt.event_id;
+            const title = evt.title || evt.name || `Event #${eid}`;
+            const severity = evt.severity != null ? evt.severity.toFixed(2) : '';
+            return `<div class="event-pick-row" onclick="selectEvent(${eid})">
+                <span>${title}</span>
+                <span style="font-size:0.75rem; color:var(--text-secondary);">ID: ${eid} ${severity ? '| Sev: ' + severity : ''}</span>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        list.innerHTML = `<div style="color:var(--critical); padding:1rem;">Error: ${err.message}</div>`;
+    }
+}
+
+function selectEvent(id) {
+    document.getElementById('event-id-input').value = id;
+    document.getElementById('event-picker').style.display = 'none';
+    loadTimeline();
+}
+
+async function loadTimeline() {
+    const eventId = document.getElementById('event-id-input').value;
+    if (!eventId) return;
+
+    const container = document.getElementById('timeline-container');
+    const propContainer = document.getElementById('propagation-container');
+    container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">Loading timeline...</div>';
+    propContainer.innerHTML = '';
+
+    try {
+        const res = await fetch(`/api/intel/timeline/event/${eventId}`);
+        const data = await res.json();
+        const items = data.timeline || [];
+
+        if (items.length === 0) {
+            container.innerHTML = '<div class="card" style="text-align:center;color:var(--text-secondary);padding:3rem;">No timeline data for this event.</div>';
+            return;
+        }
+
+        // Sort chronologically
+        items.sort((a, b) => new Date(a.timestamp || a.time || a.published_at || 0) - new Date(b.timestamp || b.time || b.published_at || 0));
+
+        // Build timeline HTML
+        let html = '<div class="card"><h2 style="margin-bottom:1rem;">Timeline for Event #' + eventId + '</h2>';
+
+        items.forEach((item, i) => {
+            const ts = item.timestamp || item.time || item.published_at;
+            const source = item.source || item.source_name || 'Unknown';
+            const title = item.title || item.headline || '';
+            const content = item.content || item.summary || item.snippet || '';
+            const isFirst = i === 0;
+
+            // Compute delay from previous item
+            if (i > 0) {
+                const prevTs = items[i - 1].timestamp || items[i - 1].time || items[i - 1].published_at;
+                if (ts && prevTs) {
+                    const delayMs = new Date(ts) - new Date(prevTs);
+                    if (delayMs > 0) {
+                        html += `<div class="tl-delay">+${formatDelay(delayMs)} later</div>`;
+                    }
+                }
+            }
+
+            html += `
+                <div class="tl-item ${isFirst ? 'first-reporter' : ''}">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.2rem;">
+                        <div>
+                            <span style="font-size:0.8rem; font-weight:600; color:var(--accent);">${source}</span>
+                            ${isFirst ? '<span class="badge badge-critical" style="margin-left:0.4rem; font-size:0.65rem;">FIRST REPORTER</span>' : ''}
+                        </div>
+                        <span style="font-size:0.75rem; color:var(--text-secondary);">${formatTime(ts)}</span>
+                    </div>
+                    ${title ? `<div style="font-size:0.9rem; font-weight:500; margin-bottom:0.2rem;">${title}</div>` : ''}
+                    ${content ? `<div style="font-size:0.82rem; color:var(--text-secondary);">${content.substring(0, 300)}${content.length > 300 ? '...' : ''}</div>` : ''}
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Also load propagation data
+        loadPropagation(eventId);
+
+    } catch (err) {
+        container.innerHTML = `<div class="card" style="color:var(--critical);">Error: ${err.message}</div>`;
+    }
+}
+
+async function loadPropagation(eventId) {
+    const container = document.getElementById('propagation-container');
+    try {
+        const res = await fetch(`/api/intel/propagation/${eventId}`);
+        const data = await res.json();
+
+        const echoScore = data.echo_chamber_score != null ? data.echo_chamber_score : data.echo_score;
+        const sources = data.source_count || data.sources || 0;
+        const span = data.time_span || data.propagation_time || '';
+
+        let html = '<div class="card"><h2 style="margin-bottom:1rem;">Propagation Analysis</h2><div class="grid grid-3">';
+
+        if (echoScore != null) {
+            const pct = (echoScore * 100).toFixed(0);
+            const color = echoScore > 0.7 ? 'var(--critical)' : echoScore > 0.4 ? 'var(--high)' : 'var(--low)';
+            html += `
+                <div>
+                    <div class="stat-label">Echo Chamber Score</div>
+                    <div class="stat-value" style="color:${color};">${pct}%</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary);">
+                        ${echoScore > 0.7 ? 'High echo - limited independent verification' : echoScore > 0.4 ? 'Moderate echo' : 'Low echo - diverse sourcing'}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (sources) {
+            html += `
+                <div>
+                    <div class="stat-label">Unique Sources</div>
+                    <div class="stat-value">${sources}</div>
+                </div>
+            `;
+        }
+
+        if (span) {
+            html += `
+                <div>
+                    <div class="stat-label">Propagation Span</div>
+                    <div class="stat-value" style="font-size:1.4rem;">${span}</div>
+                </div>
+            `;
+        }
+
+        html += '</div>';
+
+        // Show propagation path if available
+        if (data.path && data.path.length > 0) {
+            html += '<div style="margin-top:1rem;"><h3 style="margin-bottom:0.5rem;">Propagation Path</h3>';
+            html += '<div style="display:flex; align-items:center; gap:0.3rem; flex-wrap:wrap;">';
+            data.path.forEach((node, i) => {
+                const src = node.source || node;
+                if (i > 0) html += '<span style="color:var(--text-secondary);">&#8594;</span>';
+                html += `<span class="badge" style="background:var(--bg-secondary); border:1px solid var(--border);">${src}</span>`;
+            });
+            html += '</div></div>';
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+
+    } catch {
+        // Propagation data is optional, silently skip
+    }
+}
+
+// Check URL for event_id parameter
+const urlParams = new URLSearchParams(window.location.search);
+const urlEventId = urlParams.get('event_id') || urlParams.get('id');
+if (urlEventId) {
+    document.getElementById('event-id-input').value = urlEventId;
+    loadTimeline();
+}
+</script>
+{% endblock %}

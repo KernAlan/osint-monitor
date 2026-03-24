@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Events - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Events</h2>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <select id="filter-region" onchange="loadEvents()">
+            <option value="">All Regions</option>
+            <option value="iran">Iran</option>
+            <option value="china">China</option>
+            <option value="russia">Russia</option>
+            <option value="middle_east">Middle East</option>
+        </select>
+        <select id="filter-hours" onchange="loadEvents()">
+            <option value="24">Last 24h</option>
+            <option value="72" selected>Last 3 days</option>
+            <option value="168">Last 7 days</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div id="events-table">Loading...</div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadEvents() {
+    const region = document.getElementById('filter-region').value;
+    const hours = document.getElementById('filter-hours').value;
+
+    let url = `/api/events?hours_back=${hours}&limit=100`;
+    if (region) url += `&region=${region}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    const el = document.getElementById('events-table');
+
+    if (data.events && data.events.length > 0) {
+        el.innerHTML = `<p style="color:var(--text-secondary);margin-bottom:0.5rem">${data.total} events found</p>
+            <table><tr><th>Event</th><th>Sources</th><th>Status</th><th>Region</th><th>Last Updated</th></tr>` +
+            data.events.map(e => `<tr>
+                <td><a href="/events/${e.id}">${e.summary}</a></td>
+                <td>${sourceCountLabel(e.source_count)}</td>
+                <td>${statusBadgeFromCorroboration(e)}</td>
+                <td>${e.region || '-'}</td>
+                <td style="font-size:0.8rem">${e.last_updated_at ? new Date(e.last_updated_at).toLocaleString() : '-'}</td>
+            </tr>`).join('') + '</table>';
+    } else {
+        el.innerHTML = '<p style="color:var(--text-secondary)">No events match the current filters.</p>';
+    }
+}
+loadEvents();
+</script>
+{% endblock %}

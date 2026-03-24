@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Entities - OSINT Monitor{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1rem;">Entities</h2>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div style="display: flex; gap: 0.5rem;">
+        <input type="text" id="entity-search" placeholder="Search entities..." onkeyup="if(event.key==='Enter')loadEntities()" style="flex:1">
+        <select id="filter-type" onchange="loadEntities()">
+            <option value="">All Types</option>
+            <option value="PERSON">Person</option>
+            <option value="ORG">Organization</option>
+            <option value="GPE">Country/Region</option>
+            <option value="WEAPON_SYSTEM">Weapon System</option>
+            <option value="FACILITY">Facility</option>
+            <option value="EVENT">Event</option>
+        </select>
+        <button onclick="loadEntities()">Search</button>
+    </div>
+</div>
+
+<div class="card">
+    <div id="entities-table">Loading...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadEntities() {
+    const search = document.getElementById('entity-search').value;
+    const type = document.getElementById('filter-type').value;
+
+    let url = '/api/entities?limit=100';
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (type) url += `&entity_type=${type}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    const el = document.getElementById('entities-table');
+
+    if (data.entities && data.entities.length > 0) {
+        el.innerHTML = `<p style="color:var(--text-secondary);margin-bottom:0.5rem">${data.total} entities</p>
+            <table><tr><th>Name</th><th>Type</th><th>Mentions</th><th>Last Seen</th></tr>` +
+            data.entities.map(e => `<tr>
+                <td><a href="/entities/${e.id}">${e.canonical_name}</a></td>
+                <td><span class="badge" style="background:var(--border)">${e.entity_type}</span></td>
+                <td>${e.mention_count}</td>
+                <td style="font-size:0.8rem">${e.last_seen_at ? new Date(e.last_seen_at).toLocaleString() : '-'}</td>
+            </tr>`).join('') + '</table>';
+    } else {
+        el.innerHTML = '<p style="color:var(--text-secondary)">No entities found.</p>';
+    }
+}
+loadEntities();
+</script>
+{% endblock %}

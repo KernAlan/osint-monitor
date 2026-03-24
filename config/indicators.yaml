@@ -1,0 +1,91 @@
+# Indicators & Warnings (I&W) scenario definitions
+# Each scenario contains a set of indicators with keywords and optional entity constraints.
+# When entities are specified, BOTH an entity AND a keyword must co-occur in the same item.
+
+iran_nuclear_breakout:
+  description: "Iran moves toward nuclear weapon capability"
+  indicators:
+    - name: "IAEA inspector expulsion"
+      weight: 0.9
+      keywords: ["IAEA", "inspector", "expel", "access denied"]
+      entities: ["IAEA", "Iran"]
+    - name: "Enrichment above 60%"
+      weight: 0.95
+      keywords: ["enrichment", "90%", "weapons-grade", "HEU"]
+      entities: ["IRGC", "Iran"]
+    - name: "Fordow/Natanz expansion"
+      weight: 0.7
+      keywords: ["Fordow", "Natanz", "centrifuge", "cascade"]
+      entities: ["Iran"]
+    - name: "Arak reactor restart"
+      weight: 0.6
+      keywords: ["Arak", "heavy water", "plutonium"]
+      entities: ["Iran"]
+
+china_taiwan_invasion:
+  description: "China military action against Taiwan"
+  indicators:
+    - name: "PLA amphibious exercise surge"
+      weight: 0.8
+      keywords: ["amphibious", "exercise", "Fujian", "landing"]
+      entities: ["PLA", "China"]
+    - name: "PLAN carrier group deployment"
+      weight: 0.7
+      keywords: ["carrier", "Shandong", "Fujian", "Taiwan Strait"]
+      entities: ["PLAN", "China"]
+    - name: "Civilian vessel requisition"
+      weight: 0.9
+      keywords: ["civilian", "requisition", "ferry", "ro-ro"]
+      entities: ["China"]
+    - name: "Embassy evacuation advisory"
+      weight: 0.95
+      keywords: ["embassy", "evacuate", "Taiwan", "departure"]
+      entities: ["Taiwan"]
+    - name: "Cyber attacks on Taiwan"
+      weight: 0.6
+      keywords: ["cyber", "Taiwan", "attack", "infrastructure"]
+      entities: ["Taiwan", "China"]
+
+russia_nato_escalation:
+  description: "Russia-NATO direct military confrontation"
+  indicators:
+    - name: "Nuclear posture change"
+      weight: 0.95
+      keywords: ["nuclear", "posture", "strategic forces", "SSBN", "surge"]
+      entities: ["Russia"]
+    - name: "GPS jamming in NATO space"
+      weight: 0.7
+      keywords: ["GPS", "jamming", "Baltic", "Nordic"]
+      entities: ["Russia", "NATO"]
+    - name: "Article 5 discussion"
+      weight: 0.8
+      keywords: ["Article 5", "invoke", "collective defense"]
+      entities: ["NATO"]
+    - name: "Submarine surge"
+      weight: 0.75
+      keywords: ["submarine", "GIUK gap", "North Atlantic", "patrol"]
+      entities: ["Russia"]
+    - name: "Baltic/Nordic airspace violation"
+      weight: 0.6
+      keywords: ["airspace", "violation", "intercept", "scramble"]
+      entities: ["Russia", "NATO"]
+
+middle_east_regional_war:
+  description: "Multi-state Middle East conflict escalation"
+  indicators:
+    - name: "Hezbollah rocket barrage"
+      weight: 0.8
+      keywords: ["Hezbollah", "rocket", "barrage", "northern Israel"]
+      entities: ["Hezbollah", "Israel"]
+    - name: "Strait of Hormuz closure"
+      weight: 0.9
+      keywords: ["Hormuz", "closure", "blockade", "mining"]
+      entities: ["Iran"]
+    - name: "Houthi anti-ship escalation"
+      weight: 0.7
+      keywords: ["Houthi", "ship", "Red Sea", "Bab el-Mandeb"]
+      entities: ["Houthi"]
+    - name: "US carrier group redeployment"
+      weight: 0.6
+      keywords: ["carrier", "CENTCOM", "deployment", "Persian Gulf"]
+      entities: ["United States"]

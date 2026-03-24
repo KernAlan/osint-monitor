@@ -1,107 +1,156 @@
 # OSINT Sources Configuration
-# Updated: 2026-03-15
+# Updated: 2026-03-19
+
+# Tiered polling intervals (seconds)
+# Hot:  pre-narrative signals (ADS-B, BGP, DNS, currency, commodities, defense stocks, seismic)
+# Warm: news and social (RSS, Nitter, travel advisories, OONI, flight routes, GDELT, cables)
+# Cold: slow-updating datasets (FIRMS, USGS, ACLED, sanctions, NVD, UNHCR, IAEA, SEC, finance)
+tiers:
+  hot_interval_seconds: 150    # 2.5 min
+  warm_interval_seconds: 600   # 10 min
+  cold_interval_seconds: 3600  # 60 min
 
 # RSS Feeds - these work without API keys
 rss_feeds:
-  # US Government
+  # US Government (credibility: 1.0)
   - name: "Defense.gov"
     url: "https://www.defense.gov/news/feed/"
     category: "us_gov"
+    credibility_score: 1.0
     priority: 1
-    
+    poll_interval: 900
+
   - name: "State Department"
     url: "https://www.state.gov/rss/press-releases/"
     category: "us_gov"
+    credibility_score: 1.0
     priority: 1
-    
-  # Major News (International)
-  - name: "BBC World"
-    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
-    category: "news"
-    priority: 1
-    
-  - name: "Al Jazeera"
-    url: "https://www.aljazeera.com/xml/rss/all.xml"
-    category: "news"
-    priority: 1
-    
+    poll_interval: 900
+
+  # Wire Services (credibility: 0.9)
   - name: "Reuters World"
     url: "https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best"
     category: "news"
+    credibility_score: 0.9
     priority: 1
-    
+    poll_interval: 600
+
+  # Major International News (credibility: 0.8)
+  - name: "BBC World"
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
+    category: "news"
+    credibility_score: 0.8
+    priority: 1
+    poll_interval: 600
+
+  - name: "Al Jazeera"
+    url: "https://www.aljazeera.com/xml/rss/all.xml"
+    category: "news"
+    credibility_score: 0.8
+    priority: 1
+    poll_interval: 600
+
   - name: "South China Morning Post"
     url: "https://www.scmp.com/rss/91/feed"
     category: "news"
+    credibility_score: 0.8
     priority: 2
+    poll_interval: 1800
 
-  # Analysis
+  # Specialty Analysis (credibility: 0.7)
   - name: "War on the Rocks"
     url: "https://warontherocks.com/feed/"
     category: "analysis"
+    credibility_score: 0.7
     priority: 1
-    
+    poll_interval: 3600
+
   - name: "Lawfare"
     url: "https://www.lawfaremedia.org/feed"
     category: "analysis"
+    credibility_score: 0.7
     priority: 2
-    
+    poll_interval: 3600
+
   - name: "CSIS"
     url: "https://www.csis.org/rss.xml"
     category: "analysis"
+    credibility_score: 0.7
     priority: 2
+    poll_interval: 3600
 
-  # Defense Industry
+  # Defense Industry (credibility: 0.7)
   - name: "Defense News"
     url: "https://www.defensenews.com/arc/outboundfeeds/rss/"
     category: "defense"
+    credibility_score: 0.7
     priority: 2
-    
+    poll_interval: 1800
+
   - name: "Breaking Defense"
     url: "https://breakingdefense.com/feed/"
     category: "defense"
+    credibility_score: 0.7
     priority: 2
+    poll_interval: 1800
 
 # Nitter instances for Twitter/X (no API needed)
-# These are public Nitter instances that expose RSS
 nitter_instances:
   - "https://nitter.net"
   - "https://nitter.poast.org"
-  - "https://nitter.privacydev.net"
 
-# Twitter accounts to monitor (converted to Nitter RSS)
+# Twitter accounts to monitor
 twitter_accounts:
-  # Tier 1 - Most reliable
+  # Tier 1 - Most reliable (credibility: 0.5)
   - username: "bellingcat"
     focus: "investigations"
+    credibility_score: 0.5
   - username: "TheIntelFrog"
     focus: "military"
-  - username: "barbarastarrcnn"
-    focus: "pentagon"
-  - username: "DeptofDefense"
-    focus: "official"
+    credibility_score: 0.5
+  # barbarastarrcnn — removed, consistently returns 0 items across all instances
+  # - username: "barbarastarrcnn"
+  #   focus: "pentagon"
+  #   credibility_score: 0.5
+  # DeptofDefense — removed, consistently returns 0 items across all instances
+  # - username: "DeptofDefense"
+  #   focus: "official"
+  #   credibility_score: 0.8
   - username: "CENTCOM"
     focus: "official"
+    credibility_score: 0.8
   - username: "NATO"
     focus: "official"
-  
-  # Tier 2 - Regional
-  - username: "OSINT_Ukraine"
-    focus: "ukraine"
+    credibility_score: 0.8
+
+  # Tier 2 - Regional (credibility: 0.3-0.4)
+  # OSINT_Ukraine — removed, consistently returns 0 items across all instances
+  # - username: "OSINT_Ukraine"
+  #   focus: "ukraine"
+  #   credibility_score: 0.4
   - username: "AuroraIntel"
     focus: "middle_east"
+    credibility_score: 0.4
   - username: "COUPSURE"
     focus: "global"
-  - username: "IntelCrab"
-    focus: "geospatial"
+    credibility_score: 0.3
+  # IntelCrab — removed, account announced sunsetting
+  # - username: "IntelCrab"
+  #   focus: "geospatial"
+  #   credibility_score: 0.4
   - username: "detresfa_"
     focus: "satellite"
+    credibility_score: 0.4
   - username: "RALee85"
     focus: "russia"
+    credibility_score: 0.4
   - username: "NavyLookout"
     focus: "naval"
-  - username: "AirbusDragon"
-    focus: "aviation"
+    credibility_score: 0.4
+  # AirbusDragon — removed, consistently returns 0 items across all instances
+  # - username: "AirbusDragon"
+  #   focus: "aviation"
+  #   credibility_score: 0.3
 
 # Alert keywords (immediate notification)
 alert_keywords:
@@ -112,7 +161,9 @@ alert_keywords:
     - "declaration of war"
     - "military mobilization"
     - "Article 5"
-    
+    - "nuclear strike"
+    - "WMD"
+
   high:
     - "troop movement"
     - "naval deployment"
@@ -122,21 +173,35 @@ alert_keywords:
     - "cyber attack"
     - "missile strike"
     - "invasion"
+    - "drone strike"
+    - "chemical weapon"
+    - "biological weapon"
+    - "martial law"
+    - "blockade"
+    - "no-fly zone"
 
 # Region focus
 regions:
   iran:
-    keywords: ["Iran", "Tehran", "IRGC", "Persian Gulf", "Strait of Hormuz", "Isfahan", "Natanz"]
+    keywords: ["Iran", "Tehran", "IRGC", "Persian Gulf", "Strait of Hormuz", "Isfahan", "Natanz", "Fordow"]
     priority: 1
-    
+
   china:
-    keywords: ["China", "Beijing", "Taiwan", "South China Sea", "PLA", "Xi Jinping"]
+    keywords: ["China", "Beijing", "Taiwan", "South China Sea", "PLA", "Xi Jinping", "Taipei", "PLAN"]
     priority: 1
-    
+
   russia:
-    keywords: ["Russia", "Moscow", "Ukraine", "Kremlin", "Putin", "NATO"]
+    keywords: ["Russia", "Moscow", "Ukraine", "Kremlin", "Putin", "NATO", "Kyiv", "Donbas", "Crimea"]
     priority: 1
-    
+
   middle_east:
-    keywords: ["Israel", "Gaza", "Syria", "Lebanon", "Yemen", "Saudi Arabia"]
+    keywords: ["Israel", "Gaza", "Syria", "Lebanon", "Yemen", "Saudi Arabia", "Hezbollah", "Hamas", "Houthi", "IDF"]
     priority: 2
+
+  north_korea:
+    keywords: ["North Korea", "DPRK", "Pyongyang", "Kim Jong Un", "Korean Peninsula"]
+    priority: 2
+
+  africa:
+    keywords: ["Sahel", "Wagner Africa", "Sudan", "Ethiopia", "Somalia", "Libya", "Niger coup"]
+    priority: 3

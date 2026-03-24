@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Event Detail - OSINT Monitor{% endblock %}
+{% block content %}
+<div id="event-content">Loading event...</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EVENT_ID = {{ event_id }};
+</script>
+<script>
+{% raw %}
+async function loadEvent() {
+    const eventId = EVENT_ID;
+    const [eventRes, corrRes, disagreementsRes] = await Promise.allSettled([
+        fetch(`/api/events/${eventId}`),
+        fetch(`/api/intel/corroboration/${eventId}`),
+        fetch(`/api/intel/corroboration/${eventId}/disagreements`),
+    ]);
+
+    const e = eventRes.status === 'fulfilled' ? await eventRes.value.json() : null;
+    if (!e) {
+        document.getElementById('event-content').innerHTML = '<p style="color:var(--critical)">Failed to load event.</p>';
+        return;
+    }
+
+    const corr = corrRes.status === 'fulfilled' && corrRes.value.ok ? await corrRes.value.json() : null;
+    const disagreements = disagreementsRes.status === 'fulfilled' && disagreementsRes.value.ok ? await disagreementsRes.value.json() : null;
+
+    const corrLevel = corr ? (corr.corroboration_level || corr.level || corr.status || 'UNVERIFIED').toUpperCase() : 'UNVERIFIED';
+    const corrRating = corr ? (corr.admiralty_rating || '') : '';
+    const corrDisplay = corrRating ? `${corrRating} ${corrLevel}` : corrLevel;
+
+    const el = document.getElementById('event-content');
+
+    // Build disputed claims section
+    let disputedHtml = '';
+    const disputes = disagreements && (disagreements.disagreements || disagreements.disputes || []);
+    if (disputes && disputes.length > 0) {
+        disputedHtml = `
+        <div class="card" style="margin-top:1rem; border-left: 4px solid var(--high);">
+            <h2 style="color:var(--high);">Disputed Claims</h2>
+            <table>
+                <tr><th>Claim</th><th>Source</th><th>Contradiction</th></tr>
+                ${disputes.map(d => `<tr>
+                    <td>${d.claim || d.assertion || '-'}</td>
+                    <td style="font-size:0.8rem">${d.source || '-'}</td>
+                    <td>${d.contradiction || d.counter_claim || d.reason || '-'}</td>
+                </tr>`).join('')}
+            </table>
+        </div>`;
+    }
+
+    el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+            <a href="/events" style="font-size:0.9rem">&larr; Back to events</a>
+            <h2>${e.summary}</h2>
+        </div>
+
+        <div class="grid grid-3" style="margin-bottom:1rem">
+            <div class="card">
+                <div class="stat-label">Corroboration</div>
+                <div class="stat-value" style="font-size:1.2rem">${statusBadgeFromCorroboration(corr)}</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">Region</div>
+                <div class="stat-value" style="font-size:1.2rem">${e.region || 'Unknown'}</div>
+            </div>
+            <div class="card">
+                <div class="stat-label">Sources</div>
+                <div class="stat-value">${e.items ? e.items.length : 0}</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <h2>Source Items</h2>
+                <table>
+                    <tr><th>Source</th><th>Title</th><th>Published</th></tr>
+                    ${(e.items || []).map(i => `<tr>
+                        <td>${i.source}</td>
+                        <td><a href="${i.url}" target="_blank">${i.title}</a></td>
+                        <td style="font-size:0.8rem">${i.published_at ? new Date(i.published_at).toLocaleString() : '-'}</td>
+                    </tr>`).join('')}
+                </table>
+            </div>
+            <div class="card">
+                <h2>Entities</h2>
+                <table>
+                    <tr><th>Name</th><th>Type</th><th>Role</th></tr>
+                    ${(e.entities || []).map(ent => `<tr>
+                        <td><a href="/entities/${ent.id}">${ent.name}</a></td>
+                        <td>${ent.type}</td>
+                        <td>${ent.role}</td>
+                    </tr>`).join('')}
+                </table>
+            </div>
+        </div>
+
+        ${disputedHtml}
+
+        ${e.lat && e.lon ? `
+        <div class="card" style="margin-top:1rem">
+            <h2>Location</h2>
+            <div id="event-map" style="height:300px;border-radius:8px"></div>
+        </div>` : ''}
+    `;
+
+    if (e.lat && e.lon) {
+        const map = L.map('event-map').setView([e.lat, e.lon], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+        L.marker([e.lat, e.lon]).addTo(map).bindPopup(e.summary);
+    }
+}
+loadEvent();
+{% endraw %}
+</script>
+{% endblock %}
