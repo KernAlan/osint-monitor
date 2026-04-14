@@ -434,6 +434,14 @@ class CurrencyCollector(BaseCollector):
     of previous rates at ``data/currency_cache.json`` to compute 30-day
     moving averages and flag significant moves (>5 % notable, >10 % significant,
     >20 % crisis).
+
+    Cliff handling: a 30-day rolling mean walks into a step-function collapse
+    over the ~30 days after it occurs, which otherwise causes the same CRISIS
+    alert to re-fire daily while the rate oscillates inside the new range.
+    To avoid this, the collector also keeps a longer history, computes a
+    structural baseline anchored in samples >=60 days old, detects cliffs by
+    the medium-window range, and in post-cliff regimes scores severity from
+    the 7-day window so only *new* moves re-fire.
     """
 
     BASE_URL = "https://open.er-api.com/v6/latest/USD"
@@ -469,6 +477,15 @@ class CurrencyCollector(BaseCollector):
     def _avg(values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
 
+    @staticmethod
+    def _trimmed_mean(values: list[float], trim: float = 0.1) -> float:
+        if len(values) < 3:
+            return sum(values) / len(values) if values else 0.0
+        sv = sorted(values)
+        k = int(len(sv) * trim)
+        window = sv[k:len(sv) - k] if k > 0 else sv
+        return sum(window) / len(window)
+
     # -- collect --
 
     def collect(self) -> list[RawItemModel]:
@@ -493,22 +510,59 @@ class CurrencyCollector(BaseCollector):
             if current_rate is None:
                 continue
 
-            # Update rolling history
+            # Update rolling history — keep a year so we have a structural anchor
             history: list[dict] = cache.get(ccy, [])
             history.append({"date": today, "rate": current_rate})
-            # Keep last 30 entries
-            history = history[-30:]
+            history = history[-365:]
             cache[ccy] = history
 
-            historical_rates = [h["rate"] for h in history[:-1]]
-            if not historical_rates:
+            prior = history[:-1]
+            if not prior:
                 continue
 
-            avg_30d = self._avg(historical_rates)
+            medium_window = [h["rate"] for h in prior[-30:]]
+            short_window = [h["rate"] for h in prior[-7:]]
+
+            avg_30d = self._avg(medium_window)
+            avg_7d = self._avg(short_window) if short_window else avg_30d
             if avg_30d == 0:
                 continue
 
-            pct_change = ((current_rate - avg_30d) / avg_30d) * 100
+            # Structural baseline: trimmed mean of samples >=60 days old.
+            # If we don't have that much history yet, fall back to the 30-day mean
+            # (no cliff check possible, behaves like the old detector).
+            today_dt = datetime.strptime(today, "%Y-%m-%d").date()
+            structural_samples: list[float] = []
+            for h in prior:
+                try:
+                    age = (today_dt - datetime.strptime(h["date"], "%Y-%m-%d").date()).days
+                except Exception:
+                    continue
+                if age >= 60:
+                    structural_samples.append(h["rate"])
+            have_structural = len(structural_samples) >= 10
+            structural_baseline = (
+                self._trimmed_mean(structural_samples) if have_structural else avg_30d
+            )
+
+            # Cliff detected when the 30-day window spans >50% of its own mean —
+            # i.e. the window straddles a step-function move. In that regime the
+            # 30-day mean is walking and re-fires the same alert daily, so score
+            # severity from the 7-day window instead.
+            mw_min, mw_max = min(medium_window), max(medium_window)
+            cliff_detected = have_structural and (mw_max - mw_min) / avg_30d > 0.5
+
+            if cliff_detected:
+                primary_baseline = avg_7d if avg_7d else avg_30d
+                primary_label = "7-day average (post-cliff regime)"
+            else:
+                primary_baseline = avg_30d
+                primary_label = "30-day average"
+
+            if primary_baseline == 0:
+                continue
+
+            pct_change = ((current_rate - primary_baseline) / primary_baseline) * 100
             abs_change = abs(pct_change)
 
             if abs_change < 5.0:
@@ -524,14 +578,34 @@ class CurrencyCollector(BaseCollector):
             else:
                 severity = "NOTABLE"
 
+            structural_line = ""
+            if have_structural and structural_baseline > 0:
+                structural_pct = (
+                    (current_rate - structural_baseline) / structural_baseline
+                ) * 100
+                structural_line = (
+                    f"Structural baseline (>=60d old, trimmed mean): "
+                    f"{structural_baseline:.4f} per USD "
+                    f"({structural_pct:+.2f}% vs structural)\n"
+                )
+
+            cliff_line = (
+                f"Cliff detected in 30-day window: "
+                f"range {mw_min:.4f}-{mw_max:.4f}; severity scored from "
+                f"7-day window to suppress re-fires.\n"
+                if cliff_detected else ""
+            )
+
             title = f"Currency alert: {ccy} {direction} {abs_change:.1f}% vs USD [{severity}]"
             content = (
                 f"Currency: {ccy}\n"
                 f"Current rate: {current_rate:.4f} per USD\n"
-                f"30-day average: {avg_30d:.4f} per USD\n"
+                f"{primary_label}: {primary_baseline:.4f} per USD\n"
+                f"{structural_line}"
+                f"{cliff_line}"
                 f"Change: {pct_change:+.2f}%\n"
                 f"Direction: {direction} ({severity})\n"
-                f"Data points in window: {len(historical_rates)}\n"
+                f"Data points in window: {len(medium_window)}\n"
                 f"Date: {today}"
             )
 
